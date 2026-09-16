@@ -1,11 +1,15 @@
-# LLM Agent QoS Orchestrator
+# LLM-Agent QoS Orchestrator
+
+[![Tests](https://github.com/HTauX/llm-agent-qos-orchestrator/actions/workflows/tests.yml/badge.svg)](https://github.com/HTauX/llm-agent-qos-orchestrator/actions/workflows/tests.yml)
 
 A research prototype for closed-loop Quality of Service (QoS) remediation in graph-modeled networks. The system combines a six-stage LangGraph workflow, Neo4j tools exposed through the Model Context Protocol (MCP), and a remote executor exposed through the Agent2Agent (A2A) protocol.
 
-The repository provides two execution modes:
+The same workflow boundaries support two decision mechanisms:
 
-- **Deterministic mode** implements a reproducible, capacity-aware multi-path rebalancing baseline without requiring an LLM.
-- **LLM mode** assigns alarm confirmation, pressure analysis, planning, execution, and verification to tool-using agents while preserving the same workflow boundaries.
+| Mode | Decision mechanism | Intended use |
+| --- | --- | --- |
+| **Deterministic** | Python-based measurement, planning, and verification | Reproducible baseline and testing |
+| **LLM agent** | Tool-using ReAct agents with structured JSON outputs | Agentic orchestration experiments |
 
 > This is a research and demonstration system, not a production network controller. Use only with an isolated Neo4j instance and review every write path before connecting it to real infrastructure.
 
@@ -20,27 +24,56 @@ The repository provides two execution modes:
 - Deterministic baseline plus optional OpenAI-compatible or Gemini LLM mode
 - Unit tests for planner invariants, candidate metrics, and executor contracts
 
-## Architecture
+## Demonstration scenario
+
+The included `QOS_DEMO` seed models one 8 Mbps flow distributed across three candidate paths. The initial allocation places most traffic on a branch with a nearly saturated 10 Mbps link, causing the derived path latency to exceed the SLA. The workflow identifies the congested path, evaluates feasible alternatives, generates a capacity-safe rebalancing plan, delegates execution, and verifies the resulting graph state.
+
+| Parameter | Seeded value |
+| --- | --- |
+| Source and destination | `LB-EDGE-01` to `LB-APP-01` |
+| Requested rate | 8 Mbps |
+| Minimum bandwidth SLA | 5 Mbps |
+| Maximum latency SLA | 20 ms |
+| Initial path allocation | `PATH-A`: 6.4 Mbps, `PATH-B`: 0.8 Mbps, `PATH-C`: 0.8 Mbps |
+
+## System architecture
+
+```mermaid
+flowchart LR
+    Client["API client"] --> API["FastAPI orchestrator"]
+    API --> Graph["LangGraph workflow"]
+    Graph <-->|MCP| Neo4j[("Neo4j network state")]
+    Graph -->|A2A| Executor["Remote executor"]
+    Graph -. "optional MCP alert" .-> Email["Email service"]
+```
+
+## Closed-loop workflow
 
 ```mermaid
 flowchart TD
-    Client["API client"] --> API["FastAPI orchestrator"]
-    API --> Graph["LangGraph workflow"]
-    Graph --> Neo4j["Neo4j via MCP"]
-    Graph --> Executor["Executor via A2A"]
-    Graph -. optional alert .-> Email["Email via MCP"]
+    Start["API request or alarm"] --> A1["1. AlarmIngest"]
+    A1 --> A2["2. ConfirmAlarm"]
+    A2 -->|SLA satisfied| Stop["Stop"]
+    A2 -->|SLA violated| A3["3. AnalyzePressure"]
+    A3 -->|No feasible path| Stop
+    A3 --> A4["4. PlanChange"]
+    A4 -->|plan_ok = false| Stop
+    A4 -->|plan_ok = true| A5["5. ExecuteChange"]
+    A5 -->|Failure or rollback| Stop
+    A5 -->|A2A success| A6["6. RegressionVerify"]
+    A6 --> Result["Verified graph state"]
 ```
 
-The workflow is intentionally divided into auditable stages:
+Each stage has a narrow, auditable responsibility:
 
 | Stage | Responsibility | External capability |
 | --- | --- | --- |
-| `AlarmIngest` | Create or interpret an incoming QoS alarm | Optional email notification |
-| `ConfirmAlarm` | Re-read flow state and evaluate SLA compliance | Neo4j read |
-| `AnalyzePressure` | Calculate current allocations and candidate-path metrics | Neo4j read |
-| `PlanChange` | Build a capacity-safe rebalance plan | Deterministic planner or LLM |
-| `ExecuteChange` | Send the approved plan to the executor | A2A |
-| `RegressionVerify` | Apply the atomic graph update and verify the resulting state | Neo4j write and read |
+| `AlarmIngest` | Ingest the QoS alarm and construct a structured alarm record | Optional email notification |
+| `ConfirmAlarm` | Re-read the flow and independently evaluate SLA compliance | Neo4j read through MCP |
+| `AnalyzePressure` | Measure current allocations, path latency, and residual capacity without choosing a plan | Neo4j read through MCP |
+| `PlanChange` | Select traffic shifts and build a capacity-safe atomic update | Deterministic planner or LLM agent |
+| `ExecuteChange` | Send one explicitly approved plan to the remote executor | A2A |
+| `RegressionVerify` | Apply the atomic graph update, re-read the state, and verify SLA recovery | Neo4j write and read through MCP |
 
 See [docs/architecture.md](docs/architecture.md) for the data model, planner invariants, and trust boundaries.
 
@@ -68,7 +101,7 @@ Path latency is the sum of its edge latencies. A flow using multiple paths is as
 ## Repository layout
 
 ```text
-agentic-qos-orchestrator/
+llm-agent-qos-orchestrator/
 ├── qos_system_lg/                 # Core orchestration, planning, and protocol clients
 │   ├── workflow.py                # LLM workflow and mode dispatcher
 │   ├── deterministic_workflow.py  # Deterministic workflow
