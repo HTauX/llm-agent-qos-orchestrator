@@ -50,44 +50,29 @@ flowchart LR
 ## Closed-loop workflow
 
 ```mermaid
-sequenceDiagram
-    participant Client as API client
-    participant Workflow as LangGraph workflow
-    participant Neo4j as Neo4j via MCP
-    participant Executor as A2A executor
+stateDiagram-v2
+    direction LR
 
-    Client->>Workflow: 1. AlarmIngest
-    Workflow->>Neo4j: 2. ConfirmAlarm
-    Neo4j-->>Workflow: Current flow and SLA state
+    state "1. Alarm Ingest" as AlarmIngest
+    state "2. Confirm Alarm" as ConfirmAlarm
+    state "3. Analyze Pressure" as AnalyzePressure
+    state "4. Plan Change" as PlanChange
+    state "5. Execute Change" as ExecuteChange
+    state "6. Regression Verify" as RegressionVerify
 
-    alt SLA satisfied
-        Workflow-->>Client: Stop
-    else SLA violated
-        Workflow->>Neo4j: 3. AnalyzePressure
-        Neo4j-->>Workflow: Paths, loads, and residual capacity
+    [*] --> AlarmIngest: API request or alarm
+    AlarmIngest --> ConfirmAlarm
+    ConfirmAlarm --> AnalyzePressure: SLA violated
+    AnalyzePressure --> PlanChange: Feasible path
+    PlanChange --> ExecuteChange: plan_ok = true
+    ExecuteChange --> RegressionVerify: A2A success
+    RegressionVerify --> [*]: Verified graph state
 
-        alt No feasible path
-            Workflow-->>Client: Stop
-        else Feasible path available
-            Workflow->>Workflow: 4. PlanChange
-
-            alt plan_ok = false
-                Workflow-->>Client: Stop
-            else plan_ok = true
-                Workflow->>Executor: 5. ExecuteChange
-
-                alt Failure or rollback
-                    Executor-->>Workflow: Execution failed
-                    Workflow-->>Client: Stop
-                else A2A success
-                    Executor-->>Workflow: Execution succeeded
-                    Workflow->>Neo4j: 6. RegressionVerify
-                    Neo4j-->>Workflow: Verified graph state
-                    Workflow-->>Client: Remediation result
-                end
-            end
-        end
-    end
+    ConfirmAlarm --> Stop: SLA satisfied
+    AnalyzePressure --> Stop: No feasible path
+    PlanChange --> Stop: plan_ok = false
+    ExecuteChange --> Stop: Failure or rollback
+    Stop --> [*]
 ```
 
 Each stage has a narrow, auditable responsibility:
