@@ -1,4 +1,4 @@
-# Agentic QoS Orchestrator
+# LLM Agent QoS Orchestrator
 
 A research prototype for closed-loop Quality of Service (QoS) remediation in graph-modeled networks. The system combines a six-stage LangGraph workflow, Neo4j tools exposed through the Model Context Protocol (MCP), and a remote executor exposed through the Agent2Agent (A2A) protocol.
 
