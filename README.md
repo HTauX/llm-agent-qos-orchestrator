@@ -50,18 +50,44 @@ flowchart LR
 ## Closed-loop workflow
 
 ```mermaid
-flowchart TD
-    Start["API request or alarm"] --> A1["1. AlarmIngest"]
-    A1 --> A2["2. ConfirmAlarm"]
-    A2 -->|SLA satisfied| Stop["Stop"]
-    A2 -->|SLA violated| A3["3. AnalyzePressure"]
-    A3 -->|No feasible path| Stop
-    A3 --> A4["4. PlanChange"]
-    A4 -->|plan_ok = false| Stop
-    A4 -->|plan_ok = true| A5["5. ExecuteChange"]
-    A5 -->|Failure or rollback| Stop
-    A5 -->|A2A success| A6["6. RegressionVerify"]
-    A6 --> Result["Verified graph state"]
+sequenceDiagram
+    participant Client as API client
+    participant Workflow as LangGraph workflow
+    participant Neo4j as Neo4j via MCP
+    participant Executor as A2A executor
+
+    Client->>Workflow: 1. AlarmIngest
+    Workflow->>Neo4j: 2. ConfirmAlarm
+    Neo4j-->>Workflow: Current flow and SLA state
+
+    alt SLA satisfied
+        Workflow-->>Client: Stop
+    else SLA violated
+        Workflow->>Neo4j: 3. AnalyzePressure
+        Neo4j-->>Workflow: Paths, loads, and residual capacity
+
+        alt No feasible path
+            Workflow-->>Client: Stop
+        else Feasible path available
+            Workflow->>Workflow: 4. PlanChange
+
+            alt plan_ok = false
+                Workflow-->>Client: Stop
+            else plan_ok = true
+                Workflow->>Executor: 5. ExecuteChange
+
+                alt Failure or rollback
+                    Executor-->>Workflow: Execution failed
+                    Workflow-->>Client: Stop
+                else A2A success
+                    Executor-->>Workflow: Execution succeeded
+                    Workflow->>Neo4j: 6. RegressionVerify
+                    Neo4j-->>Workflow: Verified graph state
+                    Workflow-->>Client: Remediation result
+                end
+            end
+        end
+    end
 ```
 
 Each stage has a narrow, auditable responsibility:
