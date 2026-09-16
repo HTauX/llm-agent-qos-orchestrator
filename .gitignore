@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Virtual environments
+.venv/
+venv/
+
+# Local configuration and credentials
+.env
+integrations/email_mcp/config.ini
+
+# Runtime output
+logs/
+*.log
+*.pid
+.demo_pids
+
+# Editors and operating systems
+.DS_Store
+__MACOSX/
+.idea/
+.vscode/
+
+# Build artifacts
+build/
+dist/

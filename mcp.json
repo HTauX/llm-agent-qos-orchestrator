@@ -1,0 +1,54 @@
+{
+  "mcpServers": {
+    "neo4j-cypher": {
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "-e",
+        "NEO4J_URL",
+        "-e",
+        "NEO4J_USERNAME",
+        "-e",
+        "NEO4J_DATABASE",
+        "-e",
+        "NEO4J_NAMESPACE",
+        "-e",
+        "NEO4J_TRANSPORT",
+        "-e",
+        "NEO4J_MCP_SERVER_HOST",
+        "-e",
+        "NEO4J_MCP_SERVER_PORT",
+        "-e",
+        "NEO4J_MCP_SERVER_PATH",
+        "-e",
+        "NEO4J_READ_TIMEOUT",
+        "-e",
+        "NEO4J_RESPONSE_TOKEN_LIMIT",
+        "-e",
+        "NEO4J_READ_ONLY",
+        "-e",
+        "NEO4J_SCHEMA_SAMPLE_SIZE",
+        "-e",
+        "NEO4J_PASSWORD",
+        "mcp/neo4j-cypher"
+      ],
+      "env": {
+        "NEO4J_MCP_SERVER_HOST": "0.0.0.0",
+        "NEO4J_MCP_SERVER_PORT": "8000",
+        "NEO4J_MCP_SERVER_PATH": "/mcp/"
+      }
+    },
+    "email-mcp": {
+      "command": "python",
+      "cwd": ".",
+      "args": [
+        "integrations/email_mcp/server.py",
+        "--transport",
+        "stdio"
+      ],
+      "env": {}
+    }
+  }
+}
